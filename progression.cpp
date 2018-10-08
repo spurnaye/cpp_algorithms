@@ -21,6 +21,3 @@ int main(){
   std::cout << arithmeticSequenceElements(1,2,5) << std::endl;
   return 0;
 }
-
-
-HR@Amaz0n
