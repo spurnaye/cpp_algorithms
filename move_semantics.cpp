@@ -23,3 +23,13 @@ int main(){
 
 // lvalues appear on the left side of the expression
 // You can take the reference of lvalue
+// they have identity.
+
+// R-values appear on the right side of the expression
+// they do not have identity
+// They can not be bound to a lvalue reference.
+// rvalue references represents an object that has no identity and
+// it is ready to give its ownership.
+
+// std::move its expressing an intent to move.
+// 
