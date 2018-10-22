@@ -5,41 +5,24 @@
 #include <vector>
 #include <random>
 #include <chrono>
+#include <atomic>
 
 using func_type = std::function<int(int,int)>;
 using args_ary = std::array<int,2>;
 
 struct ThreadPool{
-  bool enqueue(func_type fn, args_ary args, int remainder, int total_threads){
-    size_t next_idx = (head_idx + 1) % max_size;
-
-    if(next_idx % total_threads != remainder){
-      return false;
-    }
-    std::unique_lock<std::mutex> lk(mtx);
-
-    cv.wait(lk,[&](){
-      return work[next_idx].processed();
-    });
+  bool enqueue(func_type fn, args_ary args){
+    size_t current_head_idx = head_idx.load(std::memory_order_acquire);
+    size_t next_idx = (current_head_idx + 1) % max_size;
 
     Work w{fn, args};
     work[next_idx] = w;
-    head_idx = next_idx;
-    cv.notify_all();
+    head_idx.store(next_idx);
     return true;
   }
 
   bool process(int remainder, int total_threads){
     size_t next_idx = (tail_idx + 1) % max_size;
-
-    if(next_idx % total_threads != remainder){
-      return false;
-    }
-
-    std::unique_lock<std::mutex> lk(mtx);
-    cv.wait(lk,[&](){
-      return !work[next_idx].processed();
-    });
 
     Work w = work[next_idx];
     w.set_processed();
@@ -48,8 +31,8 @@ struct ThreadPool{
       int output = w.process();
       std::cout << output << '\n';
     }
-    tail_idx = next_idx;
-    cv.notify_all();
+    tail_idx.store(next_idx);
+
     return true;
   }
 
@@ -79,9 +62,7 @@ struct ThreadPool{
 
   static const size_t max_size = 1000;
   std::array<Work,max_size> work;
-  size_t head_idx = 0, tail_idx = 0;
-  std::condition_variable cv;
-  std::mutex mtx;
+  std::atomic<size_t> head_idx = 0, tail_idx = 0;
 };
 
 int random_num(){
@@ -99,21 +80,21 @@ int main(){
 
   std::thread producer1([&](){
     while(true){
-      tp.enqueue(adder, args_ary{random_num(),random_num()}, 0, 3);
+      tp.enqueue(adder, args_ary{random_num(),random_num()});
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }  
   });
 
   std::thread producer2([&](){
     while(true){
-      tp.enqueue(subtractor, args_ary{random_num(),random_num()}, 1, 3);  
+      tp.enqueue(subtractor, args_ary{random_num(),random_num()});  
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }  
   });
 
   std::thread producer3([&](){
     while(true){
-      tp.enqueue(multiplicator, args_ary{random_num(),random_num()}, 2, 3);  
+      tp.enqueue(multiplicator, args_ary{random_num(),random_num()});  
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }  
   });
